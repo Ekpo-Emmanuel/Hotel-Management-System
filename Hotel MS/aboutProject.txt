@@ -1,0 +1,6 @@
+//functions
+
+1. Login and Registration
+2. Sessions and Validation
+3. Room Availablilty and Status
+4. Bookings with Payment integration
