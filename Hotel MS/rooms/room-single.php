@@ -1,37 +1,52 @@
 <?php 
-require "../components/header.php";
-require "../config/config.php";
+	require "../components/header.php";
+	require "../config/config.php";
 
 
-if(isset($_GET['id'])) {
-	$id = $_GET['id'];
-	$room = $conn->query("SELECT * FROM rooms WHERE status = 1 AND id='$id'");
-	$room -> execute();
+	if(isset($_GET['id'])) {
+		$id = $_GET['id'];
+		$room = $conn->query("SELECT * FROM rooms WHERE status = 1 AND id='$id'");
+		$room -> execute();
 
-	$singleRoom = $room->fetch(PDO::FETCH_OBJ);
+		$singleRoom = $room->fetch(PDO::FETCH_OBJ);
 
-	//grabbing utilities
-	$utility = $conn->query("SELECT * FROM utilities WHERE room_id='$id'");
-	$utility -> execute();
+		//grabbing utilities
+		$utility = $conn->query("SELECT * FROM utilities WHERE room_id='$id'");
+		$utility -> execute();
 
-	$allUtilities = $utility->fetchAll(PDO::FETCH_OBJ);
-}
+		$allUtilities = $utility->fetchAll(PDO::FETCH_OBJ);
+	}
 
+	function validatePhoneNumber($phoneNumber) {
+		$cleanedPhoneNumber = preg_replace('/[^0-9]/', '', $phoneNumber);	
+		if (strlen($cleanedPhoneNumber) !== 10) {
+			return false;
+		}	
+		return true;
+	}
 
 	$get_email = "email";
 	$get_name = "fullname";
 	$get_phone = "phone_number";
+	$get_check_in = "check_in";
+	$get_check_out = "check_out";
+
 
 	$get_name_Error = "";
 	$get_email_Error = "";
 	$get_phone_Error = "";
+	$get_date_error = "";
 
 	$db_gen_Error = "";
 
 	if(isset($_POST["submit"])) {
 		$email = trim($_POST[$get_email]);
 		$name = trim($_POST[$get_name]);
-		$phone = trim($_POST[$get_phone]);
+		$phone = $_POST[$get_phone];
+		$checkIn = $_POST[$get_check_in];
+		$checkOut = $_POST[$get_check_out];
+		$hotel_name = $singleRoom->hotel_name;
+		$room_name = $singleRoom->name;
 
 		//validate name
 		if(empty($name)) {
@@ -45,6 +60,43 @@ if(isset($_GET['id'])) {
 			$get_email_Error = "Please enter an email";
 		} else if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 			$get_email_Error = "Please enter a valid email";
+		}
+		
+		//phone validation
+		if(empty($phone)) {
+			$get_phone_Error = "Please Enter your Phone Number";
+		} else if (!validatePhoneNumber($phone)) {
+			$get_phone_Error = "Please Enter a valid Phone Number";
+		} else {
+			$phone = $phone;
+		}
+
+		//date validation
+		if(empty($checkIn) OR empty($checkOut)){
+			$get_date_error = "Enter checkIn and checkOut dates";
+		} else if (date("Y/m/d") > $checkIn OR date("Y/m/d") > $checkOut) {
+			$get_date_error = "Pick a date that is not in the past";
+		} else if ($checkIn > $checkOut OR $checkIn == date("Y/m/d")) {
+			$get_date_error = "You cannot Pick today's date";
+		} 
+
+
+		if(empty($get_name_Error) AND empty($get_email_Error) AND empty($get_phone_Error) AND empty($get_date_error)) {
+			$user_id = $_SESSION['id'];
+
+			$booking = $conn->prepare("INSERT INTO bookings (check_in, check_out, email, phone_number, full_name, hotel_name, room_name, user_Id) VALUES (:check_in, :check_out, :email, :phone_number, :full_name, :hotel_name, :room_name, :user_Id)");
+
+			$booking -> execute([
+				":check_in" => $checkIn, 
+				":check_out" => $checkOut, 
+				":email" => $email, 
+				":phone_number" => $phone, 
+				":full_name" => $name, 
+				":hotel_name" => $hotel_name, 
+				":room_name" => $room_name, 
+				":user_Id" => $user_id,
+			]);
+
 		}
 	}
 
@@ -87,9 +139,9 @@ if(isset($_GET['id'])) {
 							</div>
 
 							<div class="col-md-12">
-								<div class="form-group" style="background:#F2F2F2">
+								<div class="form-group">
 									<span style="color:red; font-size: 10px"><?php echo $get_phone_Error ?></span>
-									<input type="tel" class="form-control" id="phone" style="background:red" name="<?php echo $get_phone ?>" value="<?php if(isset($phone)) {echo $phone;} ?>">
+									<input type="tel" class="form-control" id="phon"  name="<?php echo $get_phone ?>" value="<?php if(isset($phone)) {echo $phone;} ?>" placeholder="phone number">
 								</div>
 							</div>
 
@@ -97,17 +149,17 @@ if(isset($_GET['id'])) {
 								<div class="form-group">
 								<div class="input-wrap">
 									<div class="icon"><span class="ion-md-calendar"></span></div>
-										<input type="text" class="form-control appointment_date-check-in" placeholder="Check-In">
+										<input type="text" class="form-control appointment_date-check-in" name="<?php echo $get_check_in ?>" placeholder="Check-In" value="<?php if(isset($checkIn)) {echo $checkIn;} ?>">
 									</div>
 								</div>
 							</div>
-						
 							<div class="col-md-6">
-									<div class="form-group">
-										<div class="icon"><span class="ion-md-calendar"></span></div>
-										<input type="text" class="form-control appointment_date-check-out" placeholder="Check-Out">
-									</div>
+								<div class="form-group">
+									<div class="icon"><span class="ion-md-calendar"></span></div>
+									<input type="text" class="form-control appointment_date-check-out" name="<?php echo $get_check_out ?>" placeholder="Check-Out" value="<?php if(isset($checkOut)) {echo $checkOut;} ?>">
+								</div>
 							</div>
+							<span style="color:red; font-size: 10px"><?php echo $get_date_error ?></span>
 							
 						
 						
@@ -176,7 +228,8 @@ if(isset($_GET['id'])) {
       var input = document.querySelector("#phone");
       window.intlTelInput(input, {
         initialCountry: "ca",
-        preferredCountries: ['ca', 'us'],
+		onlyCountries: ['ca', 'us'],
+        // preferredCountries: ['ca', 'us'],
         separateDialCode: true,
         showFlags: true,
         utilsScript: "<?php echo $appUrl ?>/js/utils.js"
